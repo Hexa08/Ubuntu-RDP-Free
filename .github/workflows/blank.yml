@@ -13,8 +13,8 @@ jobs:
           sudo systemctl enable xrdp
 
           # Create custom user 'root' with hostname 'hydra'
-          sudo useradd -m root
-          echo "root:hydra" | sudo chpasswd
+          sudo useradd -m hydra
+          echo "hydra:root@hydra" | sudo chpasswd
           echo "hydra" | sudo tee /etc/hostname
           sudo hostnamectl set-hostname hydra
 
