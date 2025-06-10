@@ -34,7 +34,7 @@ jobs:
           wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-linux-amd64.zip
           unzip ngrok-stable-linux-amd64.zip
           sudo mv ngrok /usr/local/bin
-          ngrok authtoken YOUR_NGROK_AUTH_TOKEN
+          ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
           nohup ngrok tcp 3389 &
 
       - name: Show RDP connection info
