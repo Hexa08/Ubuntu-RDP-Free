@@ -12,17 +12,14 @@ jobs:
           sudo apt update
           sudo apt install -y openssh-server wget unzip jq net-tools python3
 
-          # Enable and start SSH
           sudo systemctl enable ssh
           sudo systemctl start ssh
 
-          # Create user 'hydra' with password 'root@hydra'
           sudo useradd -m hydra
           echo "hydra:root@hydra" | sudo chpasswd
           echo "hydra" | sudo tee /etc/hostname
           sudo hostnamectl set-hostname hydra
 
-          # Allow password login
           sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
           echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config
@@ -30,11 +27,9 @@ jobs:
           echo "ChallengeResponseAuthentication no" | sudo tee -a /etc/ssh/sshd_config
           sudo systemctl restart ssh
 
-          # Save the public key to a file accessible by HTTP
           echo "${{ secrets.SSH_PUBLIC_KEY }}" | sudo tee /home/hydra/hydra_key.pub
           sudo chown hydra:hydra /home/hydra/hydra_key.pub
 
-          # Create password-protected HTTP server script
           cat << 'EOF' | sudo tee /home/hydra/auth_http_server.py
 import http.server
 import socketserver
@@ -71,7 +66,6 @@ with socketserver.TCPServer(("", PORT), AuthHandler) as httpd:
     httpd.serve_forever()
 EOF
 
-          # Run the password-protected HTTP server in background
           cd /home/hydra
           nohup python3 auth_http_server.py &
 
@@ -107,6 +101,7 @@ EOF
           echo "------------------------------------"
 
       - name: Keep Runner Alive with Interactive Extra Time
+        shell: bash
         run: |
           echo "⏳ Keeping the server alive for 8 hours..."
           sleep $((60 * 60 * 8))
