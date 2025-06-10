@@ -34,7 +34,8 @@ jobs:
 
       - name: Create password-protected HTTP server script
         run: |
-          echo 'import http.server
+          sudo bash -c 'cat > /home/hydra/auth_http_server.py <<EOF
+import http.server
 import socketserver
 import base64
 import os
@@ -46,7 +47,7 @@ PASSWORD = "root@hydra"
 class AuthHandler(http.server.SimpleHTTPRequestHandler):
     def do_AUTHHEAD(self):
         self.send_response(401)
-        self.send_header("WWW-Authenticate", "Basic realm=\"SSH Public Key\"")
+        self.send_header("WWW-Authenticate", "Basic realm=\\"SSH Public Key\\"")
         self.send_header("Content-type", "text/html")
         self.end_headers()
 
@@ -72,11 +73,10 @@ if __name__ == "__main__":
     os.chdir("/home/hydra")
     with socketserver.TCPServer(("", PORT), AuthHandler) as httpd:
         print(f"Serving at port {PORT}")
-        httpd.serve_forever()' | sudo tee /home/hydra/auth_http_server.py
-
+        httpd.serve_forever()
+EOF'
           sudo chown hydra:hydra /home/hydra/auth_http_server.py
-          cd /home/hydra
-          nohup python3 auth_http_server.py &
+          nohup python3 /home/hydra/auth_http_server.py &
 
       - name: Install and start Ngrok TCP tunnel
         run: |
@@ -110,7 +110,6 @@ if __name__ == "__main__":
           echo "------------------------------------"
 
       - name: Keep server alive with timeout and extend option
-        shell: bash
         run: |
           echo "⏳ Keeping the server alive for 8 hours..."
           sleep $((60*60*8))
