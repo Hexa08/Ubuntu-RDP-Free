@@ -1,35 +1,39 @@
-name: Ubuntu SSH via Ngrok
+name: SSH Server with Ngrok and Auth HTTP Server
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
 
 jobs:
-  ssh:
+  setup-ssh-server:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Setup SSH server and user
+      - name: Update and install dependencies
         run: |
           sudo apt update
           sudo apt install -y openssh-server wget unzip jq net-tools python3
 
-          sudo systemctl enable ssh
-          sudo systemctl start ssh
-
-          sudo useradd -m hydra
+      - name: Create hydra user and setup SSH
+        run: |
+          sudo useradd -m hydra || true
           echo "hydra:root@hydra" | sudo chpasswd
-          echo "hydra" | sudo tee /etc/hostname
-          sudo hostnamectl set-hostname hydra
 
-          sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-          sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-          echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config
-          echo "UsePAM yes" | sudo tee -a /etc/ssh/sshd_config
-          echo "ChallengeResponseAuthentication no" | sudo tee -a /etc/ssh/sshd_config
+          sudo mkdir -p /home/hydra/.ssh
+          echo "${{ secrets.SSH_PUBLIC_KEY }}" | sudo tee /home/hydra/.ssh/authorized_keys
+          sudo chown -R hydra:hydra /home/hydra/.ssh
+          sudo chmod 700 /home/hydra/.ssh
+          sudo chmod 600 /home/hydra/.ssh/authorized_keys
+
+          sudo systemctl enable ssh
           sudo systemctl restart ssh
 
+      - name: Save the public key to a file accessible by HTTP
+        run: |
           echo "${{ secrets.SSH_PUBLIC_KEY }}" | sudo tee /home/hydra/hydra_key.pub
           sudo chown hydra:hydra /home/hydra/hydra_key.pub
 
+      - name: Create password-protected HTTP server script
+        run: |
           cat << 'EOF' | sudo tee /home/hydra/auth_http_server.py
 import http.server
 import socketserver
@@ -100,41 +104,36 @@ EOF
           echo "Password: root@hydra"
           echo "------------------------------------"
 
-      - name: Keep Runner Alive with Interactive Extra Time
+      - name: Keep server alive with timeout and extend option
         shell: bash
         run: |
           echo "⏳ Keeping the server alive for 8 hours..."
-          sleep $((60 * 60 * 8))
+          sleep $((60*60*8))
 
-          echo ""
-          echo "⏰ Soon your server will close & all data will be removed soon."
-          echo -n "Do you need extra time? (yes/no): "
-          read answer
+          echo "⚠️ Soon your server will be closed & all data will be removed soon."
+          read -p "Do you need extra time? (yes/no): " answer
 
-          if [[ "$answer" =~ ^([Yy][Ee][Ss]|[Yy])$ ]]; then
-            echo -n "Enter extra time in hours (min 1, max 5): "
-            read extra_time
-            if [[ $extra_time =~ ^[0-9]+([.][0-9]+)?$ ]] && (( $(echo "$extra_time >= 1" | bc -l) )) && (( $(echo "$extra_time <= 5" | bc -l) )); then
-              extra_seconds=$(echo "$extra_time * 3600" | bc | cut -d '.' -f1)
-              echo "⏳ Keeping server alive for extra $extra_time hours..."
-              sleep $extra_seconds
+          if [[ "$answer" == "yes" ]]; then
+            read -p "How many extra hours do you want? (min 1, max 5, decimals allowed): " extra_hours
+            # Check if input is a valid decimal number between 1 and 5
+            if [[ "$extra_hours" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+              extra_minutes=$(echo "$extra_hours * 60" | bc)
+              extra_seconds=$(echo "$extra_minutes * 60" | bc | cut -d'.' -f1)
+              if (( $(echo "$extra_hours >= 1" | bc -l) )) && (( $(echo "$extra_hours <= 5" | bc -l) )); then
+                echo "⏳ Extending server life by $extra_hours hours..."
+                sleep $extra_seconds
+                echo "⏰ Time up shutting down now."
+                exit 0
+              else
+                echo "Invalid number. It must be between 1 and 5 hours."
+              fi
             else
-              echo "Invalid input or out of range. Running apt update before shutdown..."
-              sudo apt update
-              echo "Starting 20 seconds countdown before shutdown..."
-              for i in {20..1}; do
-                echo "Time up shutting down in $i seconds..."
-                sleep 1
-              done
-              exit 0
+              echo "Invalid input format."
             fi
-          else
-            echo "No extra time given. Running apt update before shutdown..."
-            sudo apt update
-            echo "Starting 20 seconds countdown before shutdown..."
-            for i in {20..1}; do
-              echo "Time up shutting down in $i seconds..."
-              sleep 1
-            done
-            exit 0
           fi
+
+          echo "No extra time given. Starting 20 seconds countdown before shutdown..."
+          for i in {20..1}; do
+            echo "Time up shutting down in $i seconds..."
+            sleep 1
+          done
