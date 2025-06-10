@@ -11,7 +11,7 @@ jobs:
       - name: Update and install dependencies
         run: |
           sudo apt update
-          sudo apt install -y openssh-server wget unzip jq net-tools python3 bc
+          sudo apt install -y openssh-server wget unzip jq net-tools python3 python3-pip bc
 
       - name: Create hydra user and setup SSH
         run: |
@@ -34,7 +34,7 @@ jobs:
 
       - name: Create password-protected HTTP server script
         run: |
-          sudo bash -c 'cat > /home/hydra/auth_http_server.py <<EOF
+          sudo tee /home/hydra/auth_http_server.py > /dev/null << 'EOF'
 import http.server
 import socketserver
 import base64
@@ -47,36 +47,38 @@ PASSWORD = "root@hydra"
 class AuthHandler(http.server.SimpleHTTPRequestHandler):
     def do_AUTHHEAD(self):
         self.send_response(401)
-        self.send_header("WWW-Authenticate", "Basic realm=\\"SSH Public Key\\"")
-        self.send_header("Content-type", "text/html")
+        self.send_header('WWW-Authenticate', 'Basic realm="SSH Public Key"')
+        self.send_header('Content-type', 'text/html')
         self.end_headers()
 
     def do_GET(self):
-        auth_header = self.headers.get("Authorization")
+        auth_header = self.headers.get('Authorization')
         if auth_header is None:
             self.do_AUTHHEAD()
-            self.wfile.write(b"Authentication required.")
+            self.wfile.write(b'Authentication required.')
             return
         try:
-            auth_type, encoded = auth_header.split(" ", 1)
-            if auth_type.lower() == "basic":
-                decoded = base64.b64decode(encoded).decode("utf-8")
-                username, password = decoded.split(":", 1)
+            auth_type, encoded = auth_header.split(' ', 1)
+            if auth_type.lower() == 'basic':
+                decoded = base64.b64decode(encoded).decode('utf-8')
+                username, password = decoded.split(':', 1)
                 if username == USERNAME and password == PASSWORD:
                     return http.server.SimpleHTTPRequestHandler.do_GET(self)
         except Exception as e:
             pass
         self.do_AUTHHEAD()
-        self.wfile.write(b"Authentication failed.")
+        self.wfile.write(b'Authentication failed.')
 
 if __name__ == "__main__":
     os.chdir("/home/hydra")
     with socketserver.TCPServer(("", PORT), AuthHandler) as httpd:
         print(f"Serving at port {PORT}")
         httpd.serve_forever()
-EOF'
+EOF
+
           sudo chown hydra:hydra /home/hydra/auth_http_server.py
-          nohup python3 /home/hydra/auth_http_server.py &
+          cd /home/hydra
+          nohup python3 auth_http_server.py &
 
       - name: Install and start Ngrok TCP tunnel
         run: |
@@ -110,6 +112,7 @@ EOF'
           echo "------------------------------------"
 
       - name: Keep server alive with timeout and extend option
+        shell: bash
         run: |
           echo "⏳ Keeping the server alive for 8 hours..."
           sleep $((60*60*8))
