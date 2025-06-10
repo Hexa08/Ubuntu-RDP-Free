@@ -32,7 +32,7 @@ jobs:
 
       - name: Create auth HTTP server script
         run: |
-          sudo bash -c 'cat > /home/hydra/auth_http_server.py' << 'EOF'
+          sudo bash -c "cat > /home/hydra/auth_http_server.py << 'EOF'
 import http.server
 import socketserver
 import base64
