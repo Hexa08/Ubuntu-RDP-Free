@@ -11,7 +11,7 @@ jobs:
       - name: Update and install dependencies
         run: |
           sudo apt update
-          sudo apt install -y openssh-server wget unzip jq net-tools python3
+          sudo apt install -y openssh-server wget unzip jq net-tools python3 bc
 
       - name: Create hydra user and setup SSH
         run: |
@@ -38,6 +38,7 @@ jobs:
 import http.server
 import socketserver
 import base64
+import os
 
 PORT = 8000
 USERNAME = "hydra"
@@ -56,20 +57,26 @@ class AuthHandler(http.server.SimpleHTTPRequestHandler):
             self.do_AUTHHEAD()
             self.wfile.write(b'Authentication required.')
             return
-        auth_type, encoded = auth_header.split(' ', 1)
-        if auth_type.lower() == 'basic':
-            decoded = base64.b64decode(encoded).decode('utf-8')
-            username, password = decoded.split(':', 1)
-            if username == USERNAME and password == PASSWORD:
-                return http.server.SimpleHTTPRequestHandler.do_GET(self)
+        try:
+            auth_type, encoded = auth_header.split(' ', 1)
+            if auth_type.lower() == 'basic':
+                decoded = base64.b64decode(encoded).decode('utf-8')
+                username, password = decoded.split(':', 1)
+                if username == USERNAME and password == PASSWORD:
+                    return http.server.SimpleHTTPRequestHandler.do_GET(self)
+        except Exception as e:
+            pass
         self.do_AUTHHEAD()
         self.wfile.write(b'Authentication failed.')
 
-with socketserver.TCPServer(("", PORT), AuthHandler) as httpd:
-    print(f"Serving at port {PORT}")
-    httpd.serve_forever()
+if __name__ == "__main__":
+    os.chdir("/home/hydra")
+    with socketserver.TCPServer(("", PORT), AuthHandler) as httpd:
+        print(f"Serving at port {PORT}")
+        httpd.serve_forever()
 EOF
 
+          sudo chown hydra:hydra /home/hydra/auth_http_server.py
           cd /home/hydra
           nohup python3 auth_http_server.py &
 
@@ -111,10 +118,18 @@ EOF
           sleep $((60*60*8))
 
           echo "⚠️ Soon your server will be closed & all data will be removed soon."
-          read -p "Do you need extra time? (yes/no): " answer
+          if [ -t 0 ]; then
+            read -p "Do you need extra time? (yes/no): " answer
+          else
+            answer="no"
+          fi
 
           if [[ "$answer" == "yes" ]]; then
-            read -p "How many extra hours do you want? (min 1, max 5, decimals allowed): " extra_hours
+            if [ -t 0 ]; then
+              read -p "How many extra hours do you want? (min 1, max 5, decimals allowed): " extra_hours
+            else
+              extra_hours="1"
+            fi
             # Check if input is a valid decimal number between 1 and 5
             if [[ "$extra_hours" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
               extra_minutes=$(echo "$extra_hours * 60" | bc)
