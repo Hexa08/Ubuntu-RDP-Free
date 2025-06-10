@@ -1,10 +1,11 @@
-name: Ubuntu SSH via Ngrok
+name: Ubuntu SSH via Ngrok (8 hours uptime)
 
 on: workflow_dispatch
 
 jobs:
   ssh:
     runs-on: ubuntu-latest
+    timeout-minutes: 480  # 8 hours
 
     steps:
       - name: Setup SSH server and user
@@ -12,21 +13,19 @@ jobs:
           sudo apt update
           sudo apt install -y openssh-server wget unzip jq net-tools
 
-          # Enable and start ssh service
           sudo systemctl enable ssh
           sudo systemctl start ssh
 
-          # Create user hydra with password root@hydra
           sudo useradd -m hydra
           echo "hydra:root@hydra" | sudo chpasswd
           echo "hydra" | sudo tee /etc/hostname
           sudo hostnamectl set-hostname hydra
 
-          # Enable password authentication in ssh config
-          sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-          sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo sed -i '/^PasswordAuthentication/d' /etc/ssh/sshd_config
+          sudo sed -i '/^PubkeyAuthentication/d' /etc/ssh/sshd_config
+          echo "PasswordAuthentication yes" | sudo tee -a /etc/ssh/sshd_config
+          echo "PubkeyAuthentication no" | sudo tee -a /etc/ssh/sshd_config
 
-          # Restart ssh service to apply changes
           sudo systemctl restart ssh
 
       - name: Install and start ngrok TCP tunnel
@@ -37,7 +36,7 @@ jobs:
           ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
           nohup ngrok tcp 22 &
 
-      - name: Show SSH connection details and keep alive for 8 hours
+      - name: Show SSH connection details
         run: |
           sleep 15
           NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url')
@@ -52,8 +51,17 @@ jobs:
           echo "🔑 Pass:    root@hydra"
           echo "------------------------------------"
           echo ""
-          echo "To connect via SSH, run:"
+          echo "🔗 Connect using SSH command:"
           echo "ssh hydra@$HOST -p $PORT"
-          echo "Password: root@hydra"
-          echo ""
-          sleep 28800
+
+      - name: Keep job alive for 8 hours
+        run: |
+          SECONDS=0
+          while [ $SECONDS -lt 28800 ]; do
+            sleep 60
+          done
+
+      - name: Run apt update before finishing
+        run: |
+          echo "Time is up! Running apt update before exit."
+          sudo apt update
