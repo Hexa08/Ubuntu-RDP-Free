@@ -34,8 +34,7 @@ jobs:
 
       - name: Create password-protected HTTP server script
         run: |
-          cat << 'EOF' | sudo tee /home/hydra/auth_http_server.py
-import http.server
+          echo 'import http.server
 import socketserver
 import base64
 import os
@@ -47,34 +46,33 @@ PASSWORD = "root@hydra"
 class AuthHandler(http.server.SimpleHTTPRequestHandler):
     def do_AUTHHEAD(self):
         self.send_response(401)
-        self.send_header('WWW-Authenticate', 'Basic realm="SSH Public Key"')
-        self.send_header('Content-type', 'text/html')
+        self.send_header("WWW-Authenticate", "Basic realm=\"SSH Public Key\"")
+        self.send_header("Content-type", "text/html")
         self.end_headers()
 
     def do_GET(self):
-        auth_header = self.headers.get('Authorization')
+        auth_header = self.headers.get("Authorization")
         if auth_header is None:
             self.do_AUTHHEAD()
-            self.wfile.write(b'Authentication required.')
+            self.wfile.write(b"Authentication required.")
             return
         try:
-            auth_type, encoded = auth_header.split(' ', 1)
-            if auth_type.lower() == 'basic':
-                decoded = base64.b64decode(encoded).decode('utf-8')
-                username, password = decoded.split(':', 1)
+            auth_type, encoded = auth_header.split(" ", 1)
+            if auth_type.lower() == "basic":
+                decoded = base64.b64decode(encoded).decode("utf-8")
+                username, password = decoded.split(":", 1)
                 if username == USERNAME and password == PASSWORD:
                     return http.server.SimpleHTTPRequestHandler.do_GET(self)
         except Exception as e:
             pass
         self.do_AUTHHEAD()
-        self.wfile.write(b'Authentication failed.')
+        self.wfile.write(b"Authentication failed.")
 
 if __name__ == "__main__":
     os.chdir("/home/hydra")
     with socketserver.TCPServer(("", PORT), AuthHandler) as httpd:
         print(f"Serving at port {PORT}")
-        httpd.serve_forever()
-EOF
+        httpd.serve_forever()' | sudo tee /home/hydra/auth_http_server.py
 
           sudo chown hydra:hydra /home/hydra/auth_http_server.py
           cd /home/hydra
@@ -130,7 +128,6 @@ EOF
             else
               extra_hours="1"
             fi
-            # Check if input is a valid decimal number between 1 and 5
             if [[ "$extra_hours" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
               extra_minutes=$(echo "$extra_hours * 60" | bc)
               extra_seconds=$(echo "$extra_minutes * 60" | bc | cut -d'.' -f1)
