@@ -1,0 +1,43 @@
+name: Ubuntu RDP
+
+on: workflow_dispatch
+
+jobs:
+  rdp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Desktop and RDP
+        run: |
+          sudo apt update
+          sudo apt install -y xfce4 xfce4-goodies xrdp wget net-tools
+          sudo systemctl enable xrdp
+
+          # Create custom user 'root' with hostname 'hydra'
+          sudo useradd -m root
+          echo "root:hydra" | sudo chpasswd
+          echo "hydra" | sudo tee /etc/hostname
+          sudo hostnamectl set-hostname hydra
+
+          # Add root to ssl-cert group for RDP
+          sudo adduser root ssl-cert
+
+          # Enable RDP for root
+          sudo sed -i 's/allow_root=false/allow_root=true/' /etc/xrdp/xrdp.ini
+          echo "greeter-show-manual-login=true" | sudo tee -a /etc/lightdm/lightdm.conf
+          echo "allow-guest=false" | sudo tee -a /etc/lightdm/lightdm.conf
+
+          # Start RDP service
+          sudo systemctl restart xrdp
+
+      - name: Install Ngrok and expose RDP
+        run: |
+          wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-linux-amd64.zip
+          unzip ngrok-stable-linux-amd64.zip
+          sudo mv ngrok /usr/local/bin
+          ngrok authtoken YOUR_NGROK_AUTH_TOKEN
+          nohup ngrok tcp 3389 &
+
+      - name: Show RDP connection info
+        run: |
+          sleep 20
+          curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url'
