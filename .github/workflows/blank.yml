@@ -10,7 +10,7 @@ jobs:
       - name: Setup SSH server and user
         run: |
           sudo apt update
-          sudo apt install -y openssh-server wget unzip jq net-tools at
+          sudo apt install -y openssh-server wget unzip jq net-tools
 
           # Enable and start SSH
           sudo systemctl enable ssh
@@ -22,7 +22,7 @@ jobs:
           echo "hydra" | sudo tee /etc/hostname
           sudo hostnamectl set-hostname hydra
 
-          # SSH config edits
+          # Allow password login
           sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
           echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config
@@ -30,8 +30,9 @@ jobs:
           echo "ChallengeResponseAuthentication no" | sudo tee -a /etc/ssh/sshd_config
           sudo systemctl restart ssh
 
-          # Schedule message after 8 hours in terminal using `at`
-          echo "wall '👋 Bye! Time is up.'" | sudo at now + 8 hours
+          # Setup .bash_logout to show message when session ends
+          echo 'echo "Bye, time is up!"' | sudo tee -a /home/hydra/.bash_logout
+          sudo chown hydra:hydra /home/hydra/.bash_logout
 
       - name: Install and start Ngrok TCP tunnel
         run: |
