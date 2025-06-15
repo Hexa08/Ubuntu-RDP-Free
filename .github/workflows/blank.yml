@@ -6,7 +6,7 @@ on:
 jobs:
   mine:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # 6 hours max
+    timeout-minutes: 600  # 10 hours max
 
     steps:
     - name: Checkout
